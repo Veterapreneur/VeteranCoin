@@ -1,5 +1,24 @@
 pragma solidity ^0.4.11;
 
+/**
+* Copyright 2017 Veterapreneur
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+* documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+* rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+* the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+* WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+* COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+* OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+*
+*/
+
 
 /**
  * Math operations with safety checks
@@ -60,102 +79,140 @@ contract VeteranCoinSale is owned {
 
     using SafeMath for uint256;
 
-    uint public tokenSold;
-    uint public amountRaised;
-    uint public startDate;
-    uint public deadline;
-    uint public weekTwo;
-    uint public weekThree;
-    uint public weekFour;
-    uint public price;
-    bool crowdsaleClosed = false;
-    token public tokenReward;
+    uint private tokenSold;
+    uint private startDate;
+    uint private deadline;
+    uint private weekTwo;
+    uint private weekThree;
+    uint private weekFour;
+    // how many token units a buyer gets per wei
+    uint private rate;
+    bool private crowdsaleClosed = false;
+    token private tokenReward;
 
-    event GoalReached(address _beneficiary, uint _amountRaised);
-    event CrowdSaleClosed(address _beneficiary, uint _amountRaised);
+    event GoalReached(address _beneficiary);
+    event CrowdSaleClosed(address _beneficiary);
     event BurnedExcessTokens(address _beneficiary, uint _amountBurned);
     event Refunded(address _investor, uint _depositedValue);
     event FundTransfer(address _backer, uint _amount, bool _isContribution);
     event TokenPurchase(address _backer, uint _amount, uint _tokenAmt);
+    event TokenClaim(address _backer, uint _tokenAmt);
+    event BonusRateChange(uint _rate);
 
     /* data structure to hold information about campaign contributors */
-    mapping(bytes32 => uint) public bonusSchedule;
-    mapping(address => uint256) public balances;
-    mapping(address => uint256) public investorTokens;
+
+    // how many token units a buyer gets per wei
+    mapping(bytes32 => uint) private bonusSchedule;
+    mapping(address => uint256) private balances;
+    mapping(address => uint256) private investorTokens;
 
     /*  at initialization, setup the owner */
-    function VeteranCoinSale(address _fundManager, uint _weiBonusPrice1, uint _weiBonusPrice2,
-    uint _weiBonusPrice3, uint _weiBonusPrice4, token addressOfTokenUsedAsReward ) {
+    function VeteranCoinSale(address _fundManager, uint _week1BonusRate, uint _week2BonusRate,
+    uint _week3BonusRate, uint _week4BonusRate, token addressOfTokenUsedAsReward ) {
         if(_fundManager != 0){
             owner = _fundManager;
         }
         tokenReward = token(addressOfTokenUsedAsReward);
+
         tokenSold = 0;
-        amountRaised = 0;
-        startDate = now + 4 minutes;
+        startDate = now;
         deadline = startDate + 15 minutes;
         weekTwo = startDate + 5 minutes;
         weekThree = startDate + 7 minutes;
         weekFour = startDate + 9 minutes;
-        bonusSchedule["week1"] = _weiBonusPrice1;
-        bonusSchedule["week2"] = _weiBonusPrice2;
-        bonusSchedule["week3"] = _weiBonusPrice3;
-        bonusSchedule["week4"] = _weiBonusPrice4;
-        price = bonusSchedule["week1"];
+
+        bonusSchedule["week1"] =  _week1BonusRate;
+        bonusSchedule["week2"] =  _week2BonusRate;
+        bonusSchedule["week3"] =  _week3BonusRate;
+        bonusSchedule["week4"] =  _week4BonusRate;
+
+        //sanity checks
         require(startDate < deadline);
         require(weekTwo < weekThree);
         require(weekThree < weekFour);
+
+        require( bonusSchedule["week1"] < bonusSchedule["week2"]);
+        require( bonusSchedule["week2"] < bonusSchedule["week3"]);
+        require( bonusSchedule["week3"] < bonusSchedule["week4"]);
+
+        // set rate according to bonus schedule for week 1
+        rate = bonusSchedule["week1"];
+
     }
 
-    /* The function without name is the default function that is called whenever anyone sends funds to a contract */
-    function () payable releaseTheHounds {
+    modifier afterDeadline() { if (now >= deadline) _; }
+    modifier releaseTheHounds(){ if (now >= startDate) _;}
+
+    /**
+    * @dev tokens must be claimed() after the sale
+    */
+    function claimToken() afterDeadline {
+        uint tokens = investorTokens[msg.sender];
+        if(tokens > 0){
+            investorTokens[msg.sender] = 0;
+            tokenReward.transfer(msg.sender, tokens);
+            TokenClaim(msg.sender, tokens);
+        }
+    }
+
+    /**
+     @dev buy tokens here, claim tokens after sale ends!
+    */
+    function buyTokens() payable external releaseTheHounds {
         require (!crowdsaleClosed);
-        uint amount = msg.value;
-        balances[msg.sender]  = balances[msg.sender].add(amount);
-        //balances[msg.sender] += amount;
-        uint256 tokens = amount.div(price).mul(1 ether);
-        //uint256 tokens = (amount / price) * 1 ether;
-        amountRaised = amountRaised.add(amount);
-        //amountRaised += amount;
-        tokenReward.transfer(msg.sender, tokens);
-        FundTransfer(msg.sender, amount, true);
-        TokenPurchase(msg.sender, amount, tokens);
+        uint weiAmount = msg.value;
+
+        balances[msg.sender]  = balances[msg.sender].add(weiAmount);
+        uint256 tokens = weiAmount.mul(rate);
+
+        FundTransfer(msg.sender, weiAmount, true);
+        TokenPurchase(msg.sender, weiAmount, tokens);
         investorTokens[msg.sender] = investorTokens[msg.sender].add(tokens);
-        //investorTokens[msg.sender] = tokens;
         tokenSold = tokenSold.add(tokens);
-        //tokenSold += tokens;
+
         checkFundingGoalReached();
         checkDeadlineExpired();
         adjustBonusPrice();
     }
 
-    function refund(address investor) onlyOwner {
-        uint tokens = investorTokens[investor];
-        require(tokenReward.transferFrom(investor, owner, tokens));
-        investorTokens[investor] = 0;
-        uint256 depositedValue = balances[investor];
-        balances[investor] = 0;
-        investor.transfer(depositedValue);
-        Refunded(investor, depositedValue);
+    /**
+    * @dev tokens must be claimed() here, then approved() in coin contract to this address by tokenowner prior to refund
+    * @param _investor The amount to be transferred.
+    */
+    function refund(address _investor, uint _tokens) onlyOwner afterDeadline {
+        require(tokenReward.transferFrom(_investor, owner, _tokens));
+        uint256 depositedValue = balances[_investor];
+        balances[_investor] = 0;
+        tokenSold = tokenSold.sub(_tokens);
+        _investor.transfer(depositedValue);
+        Refunded(_investor, depositedValue);
     }
 
-    modifier afterDeadline() { if (now >= deadline) _; }
-
-    modifier releaseTheHounds(){ if (now >= startDate) _;}
-
-    function setPrice(uint256 _newSellPrice) onlyOwner{
-        price = _newSellPrice;
+    function setRate(uint256 _newRate) onlyOwner{
+        rate = _newRate;
     }
 
+    /**
+    *   @dev make two checks before writing new rate
+    */
     function adjustBonusPrice() private {
         if (now >= weekTwo && now < weekThree){
-            price = bonusSchedule["week2"];
+            if(rate != bonusSchedule["week2"]){
+                rate = bonusSchedule["week2"];
+                BonusRateChange(rate);
+            }
         }
         if (now >= weekThree && now < weekFour){
-            price = bonusSchedule["week3"];
+            if(rate != bonusSchedule["week3"]){
+                rate = bonusSchedule["week3"];
+                BonusRateChange(rate);
+            }
         }
         if(now >= weekFour){
-            price = bonusSchedule["week4"];
+            if(rate != bonusSchedule["week4"]){
+                rate = bonusSchedule["week4"];
+                BonusRateChange(rate);
+            }
         }
     }
 
@@ -163,7 +220,7 @@ contract VeteranCoinSale is owned {
         uint amount = tokenReward.balanceOf(this);
         if(amount == 0){
             crowdsaleClosed = true;
-            GoalReached(owner, amountRaised);
+            GoalReached(owner);
         }
     }
 
@@ -171,32 +228,38 @@ contract VeteranCoinSale is owned {
         if(now >= deadline){
             crowdsaleClosed = true;
             autoBurn();
-            CrowdSaleClosed(owner, amountRaised);
+            CrowdSaleClosed(owner);
         }
     }
 
+    /**
+    * @dev owner can safely withdraw contract value
+    */
     function autoBurn() private {
-        uint256 burnPile = tokenReward.balanceOf(this).sub(tokenSold);
-        //uint256 burnPile = tokenReward.balanceOf(this) - tokenSold;
-        require(burnPile > 0);
-        tokenReward.burn(burnPile);
-        BurnedExcessTokens(owner, burnPile);
-
+        uint256 burnPile = tokenReward.balanceOf(this);
+        if(burnPile > 0){
+            tokenReward.burn(burnPile);
+            BurnedExcessTokens(owner, burnPile);
+        }
     }
 
+    /**
+     * @dev owner can safely burn remaining at any time closing sale
+     */
+    function safeBurn() onlyOwner {
+        autoBurn();
+        crowdsaleClosed = true;
+        CrowdSaleClosed(owner);
+    }
+
+    /**
+    * @dev owner can safely withdraw contract value
+    */
     function safeWithdrawal() onlyOwner{
         uint256 balance = this.balance;
         if(owner.send(balance)){
             FundTransfer(owner,balance,false);
         }
-    }
-
-    function safeBurn() onlyOwner {
-        uint256 burnPile = tokenReward.balanceOf(this).sub(tokenSold);
-        //uint256 burnPile = tokenReward.balanceOf(this) - tokenSold;
-        require(burnPile > 0);
-        tokenReward.burn(burnPile);
-        BurnedExcessTokens(owner, burnPile);
     }
 
 }

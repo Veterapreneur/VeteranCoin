@@ -2,9 +2,9 @@ var VeteranCoin = artifacts.require("./VeteranCoin.sol");
 
 contract('VeteranCoin', function(accounts){
 
-    var acct0 = '0xe47591f5f16ee591b6d3294d012fc037d10ab805';
-    var acct2 = '0x878db6d21614cc5170757c3f1f77c4f0cf2feeae';
-    var acct3 = '0x707a909e5a2029a3f420650312639f089ed9cddb';
+    var acct0 = accounts[0];
+    var acct2 = accounts[2];
+    var acct3 = accounts[3];
 
  it("Initial balance Test", function(){
     return VeteranCoin.deployed().then(function(instance){

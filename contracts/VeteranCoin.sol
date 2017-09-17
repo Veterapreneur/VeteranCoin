@@ -1,6 +1,25 @@
 pragma solidity ^0.4.11;
 
 /**
+* Copyright 2017 Veterapreneur
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+* documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+* rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+* the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+* WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+* COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+* OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+*
+*/
+
+/**
  * Math operations with safety checks
  */
 library SafeMath {
@@ -55,17 +74,17 @@ contract VeteranCoin is owned{
 
     using SafeMath for uint256;
 
-    string public standard = 'Token 0.1';
-    string public name  = 'VeteranCoin';
-    string public symbol = 'VET';
-    uint8 public decimals = 18;
-    uint256 public totalSupply;
+    string private standard = 'Token 0.1';
+    string private name  = 'VeteranCoin';
+    string private symbol = 'VET';
+    uint8 private decimals = 18;
+    uint256 private totalSupply;
 
     /* This creates an array with all balances */
-    mapping (address => uint256)  balances;
-    mapping (address => mapping (address => uint256)) allowed;
+    mapping (address => uint256) private balances;
+    mapping (address => mapping (address => uint256)) private allowed;
 
-    mapping (bytes32 => uint256) public prices;
+    mapping (bytes32 => uint256) private prices;
 
     /* This generates a public event on the blockchain that will notify clients */
     event Transfer(address indexed from, address indexed to, uint256 value);
@@ -116,13 +135,13 @@ contract VeteranCoin is owned{
      */
     function transferFrom(address _from, address _to, uint256 _value) returns (bool) {
         require(_to != address(0));
-        var _allowance = allowed[_from][msg.sender];
+        uint256 allowance = allowed[_from][msg.sender];
         // Check is not needed because sub(_allowance, _value) will already throw if this condition is not met
         // require (_value <= _allowance);
 
         balances[_from] = balances[_from].sub(_value);
         balances[_to] = balances[_to].add(_value);
-        allowed[_from][msg.sender] = _allowance.sub(_value);
+        allowed[_from][msg.sender] = allowance.sub(_value);
         Transfer(_from, _to, _value);
         return true;
     }
@@ -187,7 +206,6 @@ contract VeteranCoin is owned{
      */
     function burn(uint256 _value) public returns (bool success){
         require(_value > 0);
-
         address burner = msg.sender;
         balances[burner] = balances[burner].sub(_value);
         totalSupply = totalSupply.sub(_value);
