@@ -93,7 +93,7 @@ contract VeteranCoinSale is owned {
     event GoalReached(address _beneficiary);
     event CrowdSaleClosed(address _beneficiary);
     event BurnedExcessTokens(address _beneficiary, uint _amountBurned);
-    event Refunded(address _investor, uint _depositedValue);
+    event Refunded(address _beneficiary, uint _depositedValue);
     event FundTransfer(address _backer, uint _amount, bool _isContribution);
     event TokenPurchase(address _backer, uint _amount, uint _tokenAmt);
     event TokenClaim(address _backer, uint _tokenAmt);
@@ -104,7 +104,7 @@ contract VeteranCoinSale is owned {
     // how many token units a buyer gets per wei
     mapping(bytes32 => uint)  bonusSchedule;
     mapping(address => uint256)  balances;
-    mapping(address => uint256)  investorTokens;
+    mapping(address => uint256)  beneficiaryTokens;
 
     /*  at initialization, setup the owner */
     function VeteranCoinSale(address _fundManager, uint _week1BonusRate, uint _week2BonusRate,
@@ -124,9 +124,9 @@ contract VeteranCoinSale is owned {
         bonusSchedule["week3"] =  _week3BonusRate;
         bonusSchedule["week4"] =  _week4BonusRate;
 
-        require( bonusSchedule["week1"] < bonusSchedule["week2"]);
-        require( bonusSchedule["week2"] < bonusSchedule["week3"]);
-        require( bonusSchedule["week3"] < bonusSchedule["week4"]);
+        require( bonusSchedule["week1"] > bonusSchedule["week2"]);
+        require( bonusSchedule["week2"] > bonusSchedule["week3"]);
+        require( bonusSchedule["week3"] > bonusSchedule["week4"]);
 
         tokenReward = token(addressOfTokenUsedAsReward);
 
@@ -155,27 +155,36 @@ contract VeteranCoinSale is owned {
     * @dev tokens must be claimed() after the sale
     */
     function claimToken() public afterDeadline {
-        uint tokens = investorTokens[msg.sender];
+        uint tokens = beneficiaryTokens[msg.sender];
         if(tokens > 0){
-            investorTokens[msg.sender] = 0;
+            beneficiaryTokens[msg.sender] = 0;
             tokenReward.transfer(msg.sender, tokens);
             TokenClaim(msg.sender, tokens);
         }
     }
 
     /**
-     @dev buy tokens here, claim tokens after sale ends!
+     * @dev fallback function, call the buyToken logic
+     *
+     */
+    function () payable {
+        buyTokens(msg.sender);
+    }
+
+    /**
+    *  @dev buy tokens here, claim tokens after sale ends!
     */
-    function buyTokens() payable external releaseTheHounds {
+    function buyTokens(address _beneficiary) payable releaseTheHounds {
         require (!crowdsaleClosed);
+        require (_beneficiary != 0x0);
         uint weiAmount = msg.value;
 
-        balances[msg.sender]  = balances[msg.sender].add(weiAmount);
+        balances[_beneficiary]  = balances[_beneficiary].add(weiAmount);
         uint256 tokens = weiAmount.mul(rate);
 
-        FundTransfer(msg.sender, weiAmount, true);
-        TokenPurchase(msg.sender, weiAmount, tokens);
-        investorTokens[msg.sender] = investorTokens[msg.sender].add(tokens);
+        FundTransfer(_beneficiary, weiAmount, true);
+        TokenPurchase(_beneficiary, weiAmount, tokens);
+        beneficiaryTokens[_beneficiary] = beneficiaryTokens[_beneficiary].add(tokens);
         tokenSold = tokenSold.add(tokens);
 
         checkFundingGoalReached();
@@ -184,17 +193,37 @@ contract VeteranCoinSale is owned {
     }
 
     /**
+     *
+     *    @dev balances of wei sent to this contract
+     *    @param _beneficiary number of tokens prior to claim
+     *
+     */
+    function tokenBalanceOf(address _beneficiary) public constant returns (uint256 balance){
+        return beneficiaryTokens[_beneficiary];
+    }
+
+    /**
+     *
+     *   @dev balances of wei sent this contract currently holds
+     *    @param _beneficiary how much wei this address sent to contract
+     */
+    function balanceOf(address _beneficiary) public constant returns (uint256 balance){
+        return balances[_beneficiary];
+    }
+
+    /**
     * @dev tokens must be claimed() first, then approved() in coin contract to owner address by "token holder" prior to refund
-    * @param _investor The investor getting the refund
-    * @paramto _tokens number of be transferred.
+    * @param _beneficiary The investor getting the refund
+    * @param _tokens number of be transferred.
     */
-    function refund(address _investor, uint _tokens) public onlyOwner afterDeadline {
-        require(tokenReward.transferFrom(_investor, owner, _tokens));
-        uint256 depositedValue = balances[_investor];
-        balances[_investor] = 0;
+    function refund(address _beneficiary, uint _tokens) public onlyOwner afterDeadline {
+        require(beneficiaryTokens[_beneficiary] == 0);
+        require(tokenReward.transferFrom(_beneficiary, owner, _tokens));
+        uint256 depositedValue = balances[_beneficiary];
+        balances[_beneficiary] = 0;
         tokenSold = tokenSold.sub(_tokens);
-        _investor.transfer(depositedValue);
-        Refunded(_investor, depositedValue);
+        _beneficiary.transfer(depositedValue);
+        Refunded(_beneficiary, depositedValue);
     }
     /*
     * @dev set a new rate
@@ -237,19 +266,21 @@ contract VeteranCoinSale is owned {
         }
     }
 
-    function checkDeadlineExpired() internal{
+    function checkDeadlineExpired() internal {
         if(now >= deadline){
             crowdsaleClosed = true;
-            autoBurn();
             CrowdSaleClosed(owner);
+            autoBurn();
         }
     }
 
     /**
-    * @dev owner can safely withdraw contract value
+    * @dev auto burn the tokens
+    * throws exception if balance < tokensold
     */
     function autoBurn() internal {
-        uint256 burnPile = tokenReward.balanceOf(this);
+        //todo safemath will throw, what does this do if negative number is result?
+        uint256 burnPile = tokenReward.balanceOf(this) - tokenSold;
         if(burnPile > 0){
             tokenReward.burn(burnPile);
             BurnedExcessTokens(owner, burnPile);
@@ -260,9 +291,9 @@ contract VeteranCoinSale is owned {
      * @dev owner can safely burn remaining at any time closing sale
      */
     function safeBurn() public onlyOwner {
-        autoBurn();
         crowdsaleClosed = true;
         CrowdSaleClosed(owner);
+        autoBurn();
     }
 
     /**
@@ -273,6 +304,11 @@ contract VeteranCoinSale is owned {
         if(owner.send(balance)){
             FundTransfer(owner,balance,false);
         }
+    }
+
+    // @return true if crowdsale event has ended
+    function hasEnded() public constant returns (bool) {
+        return crowdsaleClosed;
     }
 
 }
