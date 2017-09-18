@@ -26,14 +26,14 @@ contract('VeteranCoinSale', function(accounts){
            assert.equal(balance.toNumber(), 1E19, "balance incorrect");
            return coin.transfer(sale.address, 1E19);
        }).then(function(tx){
-           console.log(tx.logs[0]);
+           //console.log(tx.logs[0]);
            return coin.balanceOf.call(sale.address);
        }).then(function(balance1){
            //console.log("sale coin balance: " + balance1.toNumber());
            assert.equal(balance1.toNumber(), 1E19, "sale contract doesn't have the coins");
            return sale.buyTokens({from: accts3, value: 15E14});
        }).then(function(tx2){
-           console.log(tx2.logs[0]);
+          //console.log(tx2.logs[0]);
            return sale.balanceOf.call(accts3);
        }).then(function(balance2){
            assert.equal(balance2.toNumber(), 15E14, "Inoccrect ether balance sent to contract");
@@ -63,7 +63,19 @@ contract('VeteranCoinSale', function(accounts){
         }).then(function(){
             return coin.balanceOf.call(accounts[0]);
         }).then(function(balance){
-            assert.equal(balance.toNumber(), 10E19, "contract balance incorrect");
+            assert.equal(balance.toNumber(), 10E19, "coin contract balance incorrect");
+        });
+    });
+
+    it("Send crowdsale contract all coins!", function(){
+        return coin.transfer(sale.address, 10E19).then(function(tx){
+            //console.log(tx.logs[0]);
+            return coin.balanceOf.call(sale.address);
+        }).then(function(bal){
+            assert.equal(bal.toNumber(), 10E19, "contracts didn't get right amt of tokens");
+            return coin.balanceOf.call(accounts[0]);
+        }).then(function(bal){
+            assert.equal(bal.toNumber(), 0, "contract has every token");
         });
     });
 
@@ -73,18 +85,22 @@ contract('VeteranCoinSale', function(accounts){
        });
     });
 
-    it("buy some tokens then burn remaining and close sale", function(){
+    it("buy some tokens then burn remaining, closes sale", function(){
         return sale.buyTokens({from: accounts[3], value: 15E14}).then(function(tx){
             console.log(tx.logs[0]);
             return sale.balanceOf.call(accounts[3]);
-        }).then(function(balance){
+        }).then(function(balance) {
             assert.equal(balance.toNumber(), 15E14, "Transfer amount wrong!");
-            return sale.safeBurn();
+            return sale.tokenBalanceOf.call(accounts[3]);
+        }).then(function(tokBal){
+            assert.equal(tokBal.toNumber(), 9.99E17, "Incorrect number of tokens");
+            return sale.autoBurn();
         }).then(function(tx1){
-            console.log(tx1.logs[0]);
+            //console.log(tx1.logs[1]);
+            //console.log("Sale contract: " + sale.address);
             return coin.balanceOf.call(sale.address);
         }).then(function(zBal){
-            assert.equal(zBal.toNumber(), 0, "Tokens are left!");
+            assert.equal(zBal.toNumber(), 9.99E17, "Wrong number of tokens are left!");
         });
         // remove the fallback function so no ether can be sent otherwise, how do we pass a test when we want/expect a failure in truffle?
         /**
@@ -107,10 +123,13 @@ contract('VeteranCoinSale', function(accounts){
             assert.equal(balance.toNumber(), 9.99E17, "Tokens bought and held by contract are incorrect!");
             return sale.claimToken({from: accounts[3]});
         }).then(function(tx){
-            console.log(tx.logs[0]);
+            //console.log(tx.logs[0]);
             return sale.tokenBalanceOf.call(accounts[3]);
         }).then(function(zBal){
             assert.equal(zBal.toNumber(), 9.99E17, "Tokens are not left in this contract account! (not deadline)");
+            return coin.balanceOf.call(sale.address);
+        }).then(function(cBal){
+            assert.equal(cBal.toNumber(), 9.99E17, "Tokens needed to clain not there!");
         });
     });
 

@@ -79,15 +79,16 @@ contract VeteranCoinSale is owned {
 
     using SafeMath for uint256;
 
-    uint  tokenSold;
-    uint  startDate;
-    uint  deadline;
-    uint  weekTwo;
-    uint  weekThree;
-    uint  weekFour;
+    uint  public tokenSold;
+    uint  public startDate;
+    uint  public deadline;
+    uint  public weekTwo;
+    uint  public weekThree;
+    uint  public weekFour;
     // how many token units a buyer gets per wei
-    uint  rate;
+    uint  public rate;
     bool  crowdsaleClosed = false;
+    bool burned = false;
     token tokenReward;
 
     event GoalReached(address _beneficiary);
@@ -133,10 +134,10 @@ contract VeteranCoinSale is owned {
         tokenSold = 0;
         startDate = now;
         // todo move the times into ctr
-        deadline = startDate + 15 minutes;
-        weekTwo = startDate + 5 minutes;
-        weekThree = startDate + 7 minutes;
-        weekFour = startDate + 9 minutes;
+        deadline = startDate + 4 minutes;
+        weekTwo = startDate + 1 minutes;
+        weekThree = startDate + 2 minutes;
+        weekFour = startDate + 3 minutes;
 
         //sanity checks
         require(startDate < deadline);
@@ -150,6 +151,8 @@ contract VeteranCoinSale is owned {
 
     modifier afterDeadline() { if (now >= deadline) _; }
     modifier releaseTheHounds(){ if (now >= startDate) _;}
+    modifier callOffTheDogs(){ if (!crowdsaleClosed) _;}
+    modifier allBurned(){if (!burned) _;}
 
     /**
     * @dev tokens must be claimed() after the sale
@@ -163,11 +166,11 @@ contract VeteranCoinSale is owned {
         }
     }
 
+    //todo looks like modifiers don't work on payable, whoa!!
     /**
     *  @dev buy tokens here, claim tokens after sale ends!
     */
-    function buyTokens() payable releaseTheHounds {
-        require (!crowdsaleClosed);
+    function buyTokens() releaseTheHounds callOffTheDogs payable  {
         require (msg.sender != 0x0);
         uint weiAmount = msg.value;
 
@@ -180,7 +183,6 @@ contract VeteranCoinSale is owned {
         tokenSold = tokenSold.add(tokens);
 
         checkFundingGoalReached();
-        checkDeadlineExpired();
         adjustBonusPrice();
     }
 
@@ -251,21 +253,13 @@ contract VeteranCoinSale is owned {
     }
 
     /**
-     * @dev when # token balance is 0, it's over
+     * @dev when token's sold = token balance, it's over
      *
      */
     function checkFundingGoalReached() internal {
-        if(tokenReward.balanceOf(this) == 0){
+        if(tokenSold == tokenReward.balanceOf(this)){
             crowdsaleClosed = true;
             GoalReached(owner);
-        }
-    }
-
-    function checkDeadlineExpired() internal {
-        if(now >= deadline){
-            crowdsaleClosed = true;
-            CrowdSaleClosed(owner);
-            autoBurn();
         }
     }
 
@@ -273,22 +267,19 @@ contract VeteranCoinSale is owned {
     * @dev auto burn the tokens
     * throws exception if balance < tokensold
     */
-    function autoBurn() internal {
-        uint totalSale = tokenSold + tokenReward.balanceOf(this);
-        uint256 burnPile = totalSale - tokenSold;
+    function autoBurn() public onlyOwner allBurned {
+        crowdsaleClosed = true;
+        uint256 burnPile = tokenReward.balanceOf(this).sub(tokenSold);
         if(burnPile > 0){
             tokenReward.burn(burnPile);
             BurnedExcessTokens(owner, burnPile);
         }
+        burned = true;
     }
 
-    /**
-     * @dev owner can safely burn remaining at any time closing sale
-     */
-    function safeBurn() public onlyOwner {
+    function closeSale() public onlyOwner{
         crowdsaleClosed = true;
         CrowdSaleClosed(owner);
-        autoBurn();
     }
 
     /**

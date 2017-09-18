@@ -112,6 +112,18 @@ contract VeteranCoin is owned{
     }
 
     /**
+     * @dev Burns a specific amount of tokens.
+     * @param _value The amount of token to be burned.
+     */
+    function burn(uint256 _value) public returns (bool success){
+        require(_value > 0);
+        balances[msg.sender] = balances[msg.sender].sub(_value);
+        totalSupply = totalSupply.sub(_value);
+        Burn(msg.sender, _value);
+        return true;
+    }
+
+    /**
       * @dev transfer token for a specified address
       * @param _to The address to transfer to.
       * @param _value The amount to be transferred.
@@ -198,18 +210,7 @@ contract VeteranCoin is owned{
         return true;
     }
 
-    /**
-     * @dev Burns a specific amount of tokens.
-     * @param _value The amount of token to be burned.
-     */
-    function burn(uint256 _value) public returns (bool success){
-        require(_value > 0);
-        address burner = msg.sender;
-        balances[burner] = balances[burner].sub(_value);
-        totalSupply = totalSupply.sub(_value);
-        Burn(burner, _value);
-        return true;
-    }
+
 
 }
 
