@@ -152,12 +152,13 @@ contract VeteranCoinSale is owned {
     modifier afterDeadline() { if (now >= deadline) _; }
     modifier releaseTheHounds(){ if (now >= startDate) _;}
     modifier callOffTheDogs(){ if (!crowdsaleClosed) _;}
-    modifier allBurned(){if (!burned) _;}
+    modifier allBurned(){if (burned) _;}
+    modifier notBurned() {if (!burned) _;}
 
     /**
-    * @dev tokens must be claimed() after the sale
+    * @dev tokens can be claimed() after the sale and only after the burn
     */
-    function claimToken() public afterDeadline {
+    function claimToken() public afterDeadline allBurned {
         uint tokens = beneficiaryTokens[msg.sender];
         if(tokens > 0){
             beneficiaryTokens[msg.sender] = 0;
@@ -265,9 +266,9 @@ contract VeteranCoinSale is owned {
 
     /**
     * @dev auto burn the tokens
-    * throws exception if balance < tokensold
+    *
     */
-    function autoBurn() public onlyOwner allBurned {
+    function autoBurn() public onlyOwner notBurned {
         crowdsaleClosed = true;
         uint256 burnPile = tokenReward.balanceOf(this).sub(tokenSold);
         if(burnPile > 0){
