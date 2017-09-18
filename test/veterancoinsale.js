@@ -3,12 +3,17 @@
 const  VeteranCoin = artifacts.require("./VeteranCoin.sol");
 const  VeteranCoinSale = artifacts.require("./VeteranCoinSale.sol");
 
+/**
+ * Use the deployed contract constructor from deploy_veterancoinsale.js
+ */
 contract('VeteranCoinSale', function(accounts){
+
     var sale;
     var coin;
     var accts2 = accounts[2];
     var accts3 = accounts[3];
-    it("Init a sale", function () {
+
+    it("Init a sale do a single purchase", function () {
        return VeteranCoinSale.deployed().then(function(instance){
            sale = instance;
        }).then(function(){
@@ -26,19 +31,7 @@ contract('VeteranCoinSale', function(accounts){
        }).then(function(balance1){
            //console.log("sale coin balance: " + balance1.toNumber());
            assert.equal(balance1.toNumber(), 1E19, "sale contract doesn't have the coins");
-           return sale.buyTokens(accounts[3], {value: 15E14});
-
-           /**
-           web3.eth.sendTransaction({from: accounts[3], to: sale.address, value: 152E13}, function(err1,resp1){
-               if(err1){
-                   console.log("Error: " + err1);
-               }
-               else{
-                   console.log("Transaction: " + resp1);
-               }
-
-           });
-            */
+           return sale.buyTokens({from: accts3, value: 15E14});
        }).then(function(tx2){
            console.log(tx2.logs[0]);
            return sale.balanceOf.call(accts3);
@@ -48,6 +41,77 @@ contract('VeteranCoinSale', function(accounts){
        }).then(function(tokenBalance){
            assert.equal(tokenBalance.toNumber(), 9.99E17, "Inoccrect number of tokens reserved");
        });
+    });
+
+});
+
+/**
+ *  create our own *new instances of the VeteranCoin and Sale for new tests
+ */
+contract('VeteranCoinSale', function(accounts){
+
+    var sale;
+    var coin;
+
+    it("Start another contract w bigger amounts", function(){
+        return VeteranCoin.new(10E19, 0).then(function(instance0){
+            coin = instance0;
+        }).then(function(){
+            return VeteranCoinSale.new(0, 666, 625, 588, 556, coin.address).then(function(instance1){
+                sale = instance1;
+            });
+        }).then(function(){
+            return coin.balanceOf.call(accounts[0]);
+        }).then(function(balance){
+            assert.equal(balance.toNumber(), 10E19, "contract balance incorrect");
+        });
+    });
+
+    it("Check status of sale", function(){
+       return sale.hasEnded.call().then(function(ended){
+           assert.equal(false, ended.valueOf());
+       });
+    });
+
+    it("buy some tokens then burn remaining and close sale", function(){
+        return sale.buyTokens({from: accounts[3], value: 15E14}).then(function(tx){
+            console.log(tx.logs[0]);
+            return sale.balanceOf.call(accounts[3]);
+        }).then(function(balance){
+            assert.equal(balance.toNumber(), 15E14, "Transfer amount wrong!");
+            return sale.safeBurn();
+        }).then(function(tx1){
+            console.log(tx1.logs[0]);
+            return coin.balanceOf.call(sale.address);
+        }).then(function(zBal){
+            assert.equal(zBal.toNumber(), 0, "Tokens are left!");
+        });
+        // remove the fallback function so no ether can be sent otherwise, how do we pass a test when we want/expect a failure in truffle?
+        /**
+        web3.eth.sendTransaction({from: accounts[3], to: sale.address, value: 15E14}, function(err1,resp1){
+            if(err1){
+                console.log("Error: " + err1);
+            }
+            else{
+                console.log("Transaction: " + resp1);
+            }
+        });
+         */
+    });
+
+    it("Check sale is closed, withdraw my token and check I got it", function(){
+        return sale.hasEnded.call().then(function(ended){
+            assert.equal(true, ended.valueOf());
+            return sale.tokenBalanceOf.call(accounts[3]);
+        }).then(function(balance){
+            assert.equal(balance.toNumber(), 9.99E17, "Tokens bought and held by contract are incorrect!");
+            return sale.claimToken({from: accounts[3]});
+        }).then(function(tx){
+            console.log(tx.logs[0]);
+            return sale.tokenBalanceOf.call(accounts[3]);
+        }).then(function(zBal){
+            assert.equal(zBal.toNumber(), 9.99E17, "Tokens are not left in this contract account! (not deadline)");
+        });
     });
 
 });

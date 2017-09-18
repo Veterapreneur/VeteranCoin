@@ -164,27 +164,19 @@ contract VeteranCoinSale is owned {
     }
 
     /**
-     * @dev fallback function, call the buyToken logic
-     *
-     */
-    function () payable {
-        buyTokens(msg.sender);
-    }
-
-    /**
     *  @dev buy tokens here, claim tokens after sale ends!
     */
-    function buyTokens(address _beneficiary) payable releaseTheHounds {
+    function buyTokens() payable releaseTheHounds {
         require (!crowdsaleClosed);
-        require (_beneficiary != 0x0);
+        require (msg.sender != 0x0);
         uint weiAmount = msg.value;
 
-        balances[_beneficiary]  = balances[_beneficiary].add(weiAmount);
+        balances[msg.sender]  = balances[msg.sender].add(weiAmount);
         uint256 tokens = weiAmount.mul(rate);
 
-        FundTransfer(_beneficiary, weiAmount, true);
-        TokenPurchase(_beneficiary, weiAmount, tokens);
-        beneficiaryTokens[_beneficiary] = beneficiaryTokens[_beneficiary].add(tokens);
+        FundTransfer(msg.sender, weiAmount, true);
+        TokenPurchase(msg.sender, weiAmount, tokens);
+        beneficiaryTokens[msg.sender] = beneficiaryTokens[msg.sender].add(tokens);
         tokenSold = tokenSold.add(tokens);
 
         checkFundingGoalReached();
@@ -258,9 +250,12 @@ contract VeteranCoinSale is owned {
         }
     }
 
+    /**
+     * @dev when # token balance is 0, it's over
+     *
+     */
     function checkFundingGoalReached() internal {
-        uint amount = tokenReward.balanceOf(this);
-        if(amount == 0){
+        if(tokenReward.balanceOf(this) == 0){
             crowdsaleClosed = true;
             GoalReached(owner);
         }
@@ -279,8 +274,8 @@ contract VeteranCoinSale is owned {
     * throws exception if balance < tokensold
     */
     function autoBurn() internal {
-        //todo safemath will throw, what does this do if negative number is result?
-        uint256 burnPile = tokenReward.balanceOf(this) - tokenSold;
+        uint totalSale = tokenSold + tokenReward.balanceOf(this);
+        uint256 burnPile = totalSale - tokenSold;
         if(burnPile > 0){
             tokenReward.burn(burnPile);
             BurnedExcessTokens(owner, burnPile);
