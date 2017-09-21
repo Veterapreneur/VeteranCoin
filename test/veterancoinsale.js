@@ -31,12 +31,15 @@ contract('VeteranCoinSale', function(accounts){
        }).then(function(balance1){
            //console.log("sale coin balance: " + balance1.toNumber());
            assert.equal(balance1.toNumber(), 1E19, "sale contract doesn't have the coins");
+           return sale.openSale();
+       }).then(function(tx){
+           console.log(tx.logs[0]);
            return sale.buyTokens({from: accts3, value: 15E14});
        }).then(function(tx2){
           //console.log(tx2.logs[0]);
            return sale.balanceOf.call(accts3);
        }).then(function(balance2){
-           assert.equal(balance2.toNumber(), 15E14, "Inoccrect ether balance sent to contract");
+           assert.equal(balance2.toNumber(), 15E14, "Incorrrect ether balance sent to contract");
            return sale.tokenBalanceOf.call(accts3);
        }).then(function(tokenBalance){
            assert.equal(tokenBalance.toNumber(), 9.99E17, "Inoccrect number of tokens reserved");
@@ -79,9 +82,12 @@ contract('VeteranCoinSale', function(accounts){
         });
     });
 
-    it("Check status of sale", function(){
-       return sale.hasEnded.call().then(function(ended){
+    it("Check status of sale before started", function(){
+       return sale.saleInProgress.call().then(function(ended){
            assert.equal(false, ended.valueOf());
+           return sale.openSale();
+       }).then(function(tx){
+           console.log(tx.logs[0]);
        });
     });
 
@@ -116,8 +122,8 @@ contract('VeteranCoinSale', function(accounts){
     });
 
     it("Check sale is closed, withdraw my token and check I got it", function(){
-        return sale.hasEnded.call().then(function(ended){
-            assert.equal(true, ended.valueOf());
+        return sale.saleInProgress.call().then(function(ended){
+            assert.equal(false, ended.valueOf());
             return sale.tokenBalanceOf.call(accounts[3]);
         }).then(function(balance){
             assert.equal(balance.toNumber(), 9.99E17, "Tokens bought and held by contract are incorrect!");

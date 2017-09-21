@@ -87,12 +87,13 @@ contract VeteranCoinSale is owned {
     uint  public weekFour;
     // how many token units a buyer gets per wei
     uint  public rate;
-    bool  crowdsaleClosed = false;
-    bool burned = false;
+    bool  crowdSaleOpen;
+    bool burned;
     token tokenReward;
 
     event GoalReached(address _beneficiary);
-    event CrowdSaleClosed(address _beneficiary);
+    event CrowdSaleClosed();
+    event OpenCrowdSale();
     event BurnedExcessTokens(address _beneficiary, uint _amountBurned);
     event Refunded(address _beneficiary, uint _depositedValue);
     event FundTransfer(address _backer, uint _amount, bool _isContribution);
@@ -133,16 +134,19 @@ contract VeteranCoinSale is owned {
 
         tokenSold = 0;
         startDate = now;
-        // todo move the times into ctr
-        deadline = startDate + 4 minutes;
+
+
         weekTwo = startDate + 1 minutes;
         weekThree = startDate + 2 minutes;
         weekFour = startDate + 3 minutes;
-
+        deadline = startDate + 4 minutes;
         //sanity checks
         require(startDate < deadline);
         require(weekTwo < weekThree);
         require(weekThree < weekFour);
+
+        crowdSaleOpen = false;
+        burned = false;
 
         // set rate according to bonus schedule for week 1
         rate = bonusSchedule["week1"];
@@ -151,7 +155,7 @@ contract VeteranCoinSale is owned {
 
     modifier afterDeadline() { if (now >= deadline) _; }
     modifier releaseTheHounds(){ if (now >= startDate) _;}
-    modifier callOffTheDogs(){ if (!crowdsaleClosed) _;}
+    modifier saleOpen(){ if (crowdSaleOpen) _;}
     modifier allBurned(){if (burned) _;}
     modifier notBurned() {if (!burned) _;}
 
@@ -171,7 +175,7 @@ contract VeteranCoinSale is owned {
     /**
     *  @dev buy tokens here, claim tokens after sale ends!
     */
-    function buyTokens() releaseTheHounds callOffTheDogs payable  {
+    function buyTokens()  releaseTheHounds payable saleOpen {
         require (msg.sender != 0x0);
         uint weiAmount = msg.value;
 
@@ -220,14 +224,7 @@ contract VeteranCoinSale is owned {
         _beneficiary.transfer(depositedValue);
         Refunded(_beneficiary, depositedValue);
     }
-    /*
-    * @dev set a new rate
-    * @param how many token units a buyer gets per wei
-    */
-    function setRate(uint256 _newRate) public onlyOwner{
-        require(_newRate >0);
-        rate = _newRate;
-    }
+
 
     /**
     *   @dev make two checks before writing new rate
@@ -259,7 +256,7 @@ contract VeteranCoinSale is owned {
      */
     function checkFundingGoalReached() internal {
         if(tokenSold == tokenReward.balanceOf(this)){
-            crowdsaleClosed = true;
+            crowdSaleOpen = false;
             GoalReached(owner);
         }
     }
@@ -269,7 +266,7 @@ contract VeteranCoinSale is owned {
     *
     */
     function autoBurn() public onlyOwner notBurned {
-        crowdsaleClosed = true;
+        crowdSaleOpen = false;
         uint256 burnPile = tokenReward.balanceOf(this).sub(tokenSold);
         if(burnPile > 0){
             tokenReward.burn(burnPile);
@@ -279,8 +276,13 @@ contract VeteranCoinSale is owned {
     }
 
     function closeSale() public onlyOwner{
-        crowdsaleClosed = true;
-        CrowdSaleClosed(owner);
+        crowdSaleOpen = false;
+        CrowdSaleClosed();
+    }
+
+    function openSale() public onlyOwner{
+        crowdSaleOpen = true;
+        OpenCrowdSale();
     }
 
     /**
@@ -293,9 +295,9 @@ contract VeteranCoinSale is owned {
         }
     }
 
-    // @return true if crowdsale event has ended
-    function hasEnded() public constant returns (bool) {
-        return crowdsaleClosed;
+    // @return true if crowdsale is still going on
+    function saleInProgress() public constant returns (bool) {
+        return crowdSaleOpen;
     }
 
 }
