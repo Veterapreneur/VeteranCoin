@@ -2,6 +2,7 @@
 
 const  VeteranCoin = artifacts.require("./VeteranCoin.sol");
 const  VeteranCoinSale = artifacts.require("./VeteranCoinSale.sol");
+const VeteranCoinFree = artifacts.require("./VeteranCoinFree.sol");
 
 /**
  * Use the deployed contract constructor from deploy_veterancoinsale.js
@@ -45,6 +46,32 @@ contract('VeteranCoinSale', function(accounts){
            assert.equal(tokenBalance.toNumber(), 9.99E17, "Inoccrect number of tokens reserved");
        });
     });
+
+});
+
+contract('VeteranCoinFree', function(accounts){
+   var coin;
+   var giveAway;
+    it("Init a coin and a giveaway", function(){
+       return VeteranCoin.new(1E25, 0).then(function(instance){
+           coin = instance;
+       }).then(function () {
+           return VeteranCoinFree.new(coin.address).then(function(instance0){
+               giveAway = instance0;
+           });
+       }).then(function(){
+           return coin.balanceOf.call(accounts[0]);
+       }).then(function(balance){
+           assert.equal(balance.toNumber(), 1E25, "coin contract balance incorrect");
+       })
+    });
+    it("transfer to the giveaway", function(){
+        return coin.transfer(giveAway.address, 2E20).then(function(tx){
+            return coin.balanceOf.call(giveAway.address);
+        }).then(function(bal){
+            assert.equal(bal.toNumber(), 2E20, "contract has wrong number tokens");
+        });
+    })
 
 });
 
