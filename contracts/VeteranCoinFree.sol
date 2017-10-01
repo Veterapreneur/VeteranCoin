@@ -88,9 +88,16 @@ contract VeteranCoinFree is owned {
     /**
     *  @dev donations, no tokens only thanks!
     */
-    function donation() payable {
-        require (msg.sender != 0x0);
-        balances[msg.sender] = balances[msg.sender].add(msg.value);
+    function() payable {
+        donation(msg.sender);
+    }
+
+    /**
+    *  @dev donations, no tokens only thanks!
+    */
+    function donation(address grantor) public payable {
+        require (grantor != 0x0);
+        balances[grantor] = balances[grantor].add(msg.value);
         FundTransfer(msg.sender, msg.value, true);
     }
 
@@ -98,11 +105,20 @@ contract VeteranCoinFree is owned {
     *
     *   @dev Everyone can get 10 free tokens per call, enjoy
     */
-    function tokenGiveAway() releaseTheHounds isGiveAwayOpen{
+    function tokenGiveAway() public releaseTheHounds isGiveAwayOpen{
         uint256 tokens = 10 * 1 ether;
         tokensGiven = tokensGiven.add(tokens);
         tokenReward.transfer(msg.sender, tokens);
         checkGivenAway();
+    }
+
+    /**
+     *
+     *  @dev balances of wei sent this contract currently holds
+     *  @param _beneficiary how much wei this address sent to contract
+     */
+    function balanceOf(address _beneficiary) public constant returns (uint256 balance){
+        return balances[_beneficiary];
     }
 
     /**

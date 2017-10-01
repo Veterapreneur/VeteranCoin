@@ -40,10 +40,10 @@ contract('VeteranCoinSale', function(accounts){
           //console.log(tx2.logs[0]);
            return sale.balanceOf.call(accts3);
        }).then(function(balance2){
-           assert.equal(balance2.toNumber(), 15E14, "Incorrrect ether balance sent to contract");
+           assert.equal(balance2.toNumber(), 15E14, "Incorrect ether balance sent to contract");
            return sale.tokenBalanceOf.call(accts3);
        }).then(function(tokenBalance){
-           assert.equal(tokenBalance.toNumber(), 9.99E17, "Inoccrect number of tokens reserved");
+           assert.equal(tokenBalance.toNumber(), 9.99E17, "Incorrect number of tokens reserved");
        });
     });
 
@@ -65,13 +65,59 @@ contract('VeteranCoinFree', function(accounts){
            assert.equal(balance.toNumber(), 1E25, "coin contract balance incorrect");
        })
     });
-    it("transfer to the giveaway", function(){
+
+    it("transfer to the giveaway, check its closed, open it and check it", function(){
         return coin.transfer(giveAway.address, 2E20).then(function(tx){
             return coin.balanceOf.call(giveAway.address);
         }).then(function(bal){
             assert.equal(bal.toNumber(), 2E20, "contract has wrong number tokens");
+            // token giveaway closed
+            return giveAway.giveAwayInProgress.call();
+        }).then(function(isOpen){
+            assert.equal(false, isOpen);
+            //open giveaway
+            return giveAway.openGiveAway();
+        }).then(function(tx){
+            return giveAway.giveAwayInProgress.call();
+        }).then(function(isOpen){
+            assert.equal(true, isOpen);
         });
-    })
+    });
+
+    it("Get some tokens from the giveaway, check all the balances are correctly updated", function(){
+       return giveAway.tokenGiveAway({from:accounts[3]}).then(function (tx) {
+           return coin.balanceOf.call(accounts[3]);
+       }).then(function(bal){
+           assert.equal(bal.toNumber(), 10E18);
+           return coin.balanceOf.call(giveAway.address);
+       }).then(function(bal){
+           assert.equal(bal.toNumber(), 1.90E20);
+       });
+    });
+
+    it("take a donation in the giveaway", function(){
+        const initialBalance = web3.eth.getBalance(web3.eth.accounts[1]);
+        console.log("Balance account[1] " + web3.fromWei(initialBalance).toString());
+
+        web3.eth.sendTransaction({from: accounts[1], to: giveAway.address, value: web3.toWei(1)});
+        //console.log("Transaction id: " + tx);
+        const finalBalance = web3.eth.getBalance(giveAway.address);
+        // could use web3.fromWei to get the 'wei'
+        assert.equal(1E18, finalBalance.toNumber());
+        console.log("Contract Giveaway donations : " + web3.fromWei(finalBalance).toString())
+    });
+
+    it("Give a refund from the giveaway", function(){
+        return giveAway.balanceOf.call(accounts[1]).then(function(bal){
+            assert.equal(1E18, bal.toNumber());
+            return giveAway.refundDonation(accounts[1]);
+        }).then(function (tx) {
+            //console.log(tx.logs[0]);
+            return giveAway.balanceOf(accounts[1]);
+        }).then(function(bal){
+            assert.equal(0, bal.toNumber());
+        });
+    });
 
 });
 
@@ -118,7 +164,7 @@ contract('VeteranCoinSale', function(accounts){
        });
     });
 
-    it("buy some tokens then burn remaining, closes sale", function(){
+    it("Buy some tokens then burn remaining, closes sale", function(){
         return sale.buyTokens({from: accounts[3], value: 15E14}).then(function(tx){
             console.log(tx.logs[0]);
             return sale.balanceOf.call(accounts[3]);

@@ -175,7 +175,7 @@ contract VeteranCoinSale is owned {
     /**
     *  @dev buy tokens here, claim tokens after sale ends!
     */
-    function buyTokens()  releaseTheHounds payable saleOpen {
+    function buyTokens() releaseTheHounds payable saleOpen {
         require (msg.sender != 0x0);
         uint weiAmount = msg.value;
 
@@ -203,8 +203,8 @@ contract VeteranCoinSale is owned {
 
     /**
      *
-     *   @dev balances of wei sent this contract currently holds
-     *    @param _beneficiary how much wei this address sent to contract
+     *  @dev balances of wei sent this contract currently holds
+     *  @param _beneficiary how much wei this address sent to contract
      */
     function balanceOf(address _beneficiary) public constant returns (uint256 balance){
         return balances[_beneficiary];
